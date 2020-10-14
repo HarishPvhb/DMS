@@ -34,7 +34,7 @@ def create_log_dirs():
     '''
     Creating log dir to store temp and log files.
     '''
-    log_dir = '/tmp/workload_logs'
+    log_dir = 'workload_logs'
     decryption_logs =  log_dir + '/decryption_logs'
 
     os.system('mkdir -p {}'.format(log_dir))
@@ -119,30 +119,50 @@ def get_connection(host, user, password, port, database):
     return connection
 
 
-def run_query(host, port, root_user, root_pass, query, database=None):
+def run_query(host, port, root_user, root_pass, query, database=None,output_file=None):
     '''
     '''
-    retry = 6
-    while(retry):
-        try:
-            connection = get_connection(host, root_user, root_pass, int(port), database)
-            
-            cursor = connection.cursor()
-            cursor.execute(query)
+    if port == '1433':
+        cmd_list = [
+                    "sqlcmd",
+                    "-m 1",
+                    "-h -1",
+                    "-S", "tcp:{},{}".format(host, port),
+                    "-U", root_user,
+                    "-P", root_pass,
+                    "-Q",'"{}"'.format(query),
+                    ">", output_file
+                    ]
+        os.system(" ".join(cmd_list))
+        print(" ".join(cmd_list))
 
-            data = cursor.fetchall()
+        with open(output_file, 'r', encoding='utf-8', errors='replace') as fp:
+            lines = fp.readlines()
+        
+        return lines[:-2]
 
-            return data
+    else:
+        retry = 6
+        while(retry):
+            try:
+                connection = get_connection(host, root_user, root_pass, int(port), database)
+                
+                cursor = connection.cursor()
+                cursor.execute(query)
 
-        except Exception as e:
-            print("RETRYING...\nQUERY: {}".format(query))
-            time.sleep(5)
-            retry -= 1
-            continue
+                data = cursor.fetchall()
 
-    if retry == 0:
-        print("Error in Validating Data. EXITING.\nERROR:{}".format( e ))
-        sys.exit(1)
+                return data
+
+            except Exception as e:
+                print("RETRYING...\nQUERY: {}".format(query))
+                time.sleep(5)
+                retry -= 1
+                continue
+
+        if retry == 0:
+            print("Error in Validating Data. EXITING.\nERROR:{}".format( e ))
+            sys.exit(1)
 
 
 def run_query_datetimeoffset(host, port, root_user, root_pass, query, database=None):
@@ -320,7 +340,7 @@ def decryption_check(src_db_host, src_db_port, bs_host, bs_port, dest_db_port, r
             elif src_db_port == '1521':
                 output_file_clear = '{}/{}_{}_{}_{}_clear.txt'.format(decryption_logs, schema, table, strip(column), src_db)
             elif src_db_port == '1433':
-                output_file_clear = '{}/{}_{}_{}_clear.txt'.format(decryption_logs, db, table, strip(column))
+                output_file_clear = '{}/{}_{}_{}_clear'.format(decryption_logs, strip(db), strip(table), strip(column))
             
             #File creation for decrypted data from destination DB
             if dest_db_port == '3306':
@@ -344,10 +364,11 @@ def decryption_check(src_db_host, src_db_port, bs_host, bs_port, dest_db_port, r
             else:
                 query_dec = 'select {} from {};'.format(column, table_name)
             
-            if strip(column) != 'col_datetimeoffset':
+            query_output = run_query(src_db_host, src_db_port, root_user, root_pass, query_clear, src_db, output_file_clear)
+            '''if strip(column) != 'col_datetimeoffset':
                 query_output = run_query(src_db_host, src_db_port, root_user, root_pass, query_clear, src_db)
             else:
-                query_output = run_query_datetimeoffset(src_db_host, src_db_port, root_user, root_pass, query_clear, src_db)
+                query_output = run_query_datetimeoffset(src_db_host, src_db_port, root_user, root_pass, query_clear, src_db)'''
 
             with open(output_file_clear, 'w') as f:
                 for item in query_output:
@@ -437,6 +458,6 @@ def get_db_type(db_port):
 
 log_dir, decryption_logs = create_log_dirs()
 
-encryption_check(src_db_host, src_db_port, dest_db_host, dest_db_port, root_user, root_pass, BPS_path, BES_path, csv_path)
+#encryption_check(src_db_host, src_db_port, dest_db_host, dest_db_port, root_user, root_pass, BPS_path, BES_path, csv_path)
 
-#decryption_check(src_db_host, src_db_port, bs_host, bs_port, dest_db_port, root_user, root_pass, BPS_path, BES_path)
+decryption_check(src_db_host, src_db_port, bs_host, bs_port, dest_db_port, root_user, root_pass, BPS_path, BES_path)

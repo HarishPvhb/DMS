@@ -13,7 +13,7 @@ schema = 'New'
 table = 'LargeData'
 column = 'col_time'
 
-query = "select {} from {}.{}.{};".format(column, database,schema,table, column)
+query = "select {} from {}.{}.{};".format(column, database,schema,table)
 connection = pyodbc.connect('DRIVER={ODBC Driver 17 for SQL Server};SERVER='+host+';DATABASE='+database+';UID='+user+';PWD='+password)
 cursor = connection.cursor()
 cursor.execute(query)

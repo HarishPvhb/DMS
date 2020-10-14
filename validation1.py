@@ -8,6 +8,7 @@ import filecmp
 import binascii
 import time
 import csv
+import struct
 
 # parameters to be passed to this script.
 
@@ -22,12 +23,12 @@ dest_db_port = '3306'
 root_user = 'root'
 root_pass = 'baffle123'
 
-BPS_path = 'BPS3.txt'
+BPS_path = 'BPS2.txt'
 BES_path = ' '
 
-res_dir = 'C:/Users/haris/Desktop/DMS/BPS2.txt'
+res_dir = 'C:/Users/haris/Desktop/DMS/BPS2-1.txt'
 
-csv_path = 'sample1.csv'
+csv_path = 'sample2.csv'
 
 def create_log_dirs():
     '''
@@ -72,7 +73,7 @@ def parse_BPS(file_path):
 
         table_columns_dict[table].add(column)
 
-        column_type_dict[column] = line.split(' ')[2]
+        column_type_dict[column] = line.split(' ')[2].strip('\n')
 
     return table_columns_dict, column_type_dict
 
@@ -105,7 +106,7 @@ def get_connection(host, user, password, port, database):
                                       port=port)
 
     elif db_type == 'sql-server':
-        connection = pyodbc.connect('DRIVER={ODBC Driver 17 for SQL Server};SERVER='+host+';DATABASE='+database+';UID='+user+';PWD='+password)
+        connection = pyodbc.connect('DRIVER={ODBC Driver 17 for SQL Server};SERVER='+host+';DATABASE=MSSQL_LargeData;UID='+user+';PWD='+password)
     
     elif db_type == 'oracle':
         dsn = cx_Oracle.makedsn(host=host, 
@@ -144,6 +145,37 @@ def run_query(host, port, root_user, root_pass, query, database=None):
         sys.exit(1)
 
 
+def run_query_datetimeoffset(host, port, root_user, root_pass, query, database=None):
+    '''
+    '''
+    def handle_datetimeoffset(dto_value):
+        tup = struct.unpack("<6hI2h", dto_value)
+        tweaked = [tup[i] // 100 if i == 6 else tup[i] for i in range(len(tup))]
+        return "{:04d}-{:02d}-{:02d} {:02d}:{:02d}:{:02d}.{:07d} {:+03d}:{:02d}".format(*tweaked)
+    retry = 6
+    while(retry):
+        try:
+            connection = get_connection(host, root_user, root_pass, int(port), database)
+            
+            cursor = connection.cursor()
+            connection.add_output_converter(-155, handle_datetimeoffset)
+            cursor.execute(query)
+
+            data = cursor.fetchall()
+
+            return data
+
+        except Exception as e:
+            print("RETRYING...\nQUERY: {}".format(query))
+            time.sleep(5)
+            retry -= 1
+            continue
+
+    if retry == 0:
+        print("Error in Validating Data. EXITING.\nERROR:{}".format( e ))
+        sys.exit(1)
+
+
 def strip(string):
     '''
     '''
@@ -162,13 +194,14 @@ def encryption_count_check(csv_path, column, src_db_host, src_db_port, dest_db_h
 
             original_data = int(line[1])
             column = column
+            start_db = 'MSSQL_LargeData'
 
             if src_db_port == '1521':
                 query_clear_not_null = 'select count(*) from {}.{} where {} is not null'.format(schema, table, column)
                 query_clear_null = 'select count(*) from {}.{} where {} is null'.format(schema, table, column)
             elif src_db_port == '1433':
-                query_clear_not_null = "SELECT CONVERT(varchar(max),{},1) from {}.{}.{} where CONVERT(varchar(max),{},1) is not null;".format(column, db, schema, table, column)
-                query_clear_null = "SELECT CONVERT(varchar(max),{},1) from {}.{}.{} where CONVERT(varchar(max),{},1) is null;".format(column, db, schema, table, column)
+                query_clear_not_null = 'select count(*) from {}.{}.{} where {} is not null;'.format(start_db, strip(db), strip(table), strip(column))
+                query_clear_null = 'select count(*) from {}.{}.{} where {} is null;'.format(start_db, strip(db), strip(table), strip(column))
             elif src_db_port == '3306':
                 query_clear_not_null = 'select count(*) from {}.{} where {} is not null'.format(db, table, column)
                 query_clear_null = 'select count(*) from {}.{} where {} is null'.format(db, table, column)
@@ -182,15 +215,15 @@ def encryption_count_check(csv_path, column, src_db_host, src_db_port, dest_db_h
             ON = original_null[0][0]
 
             if dest_db_port == '3306':
-                query_enc_not_null = 'select count(*) from {}.{} where {} is not null'.format(db, table, column)
-                query_enc_null = 'select count(*) from {}.{} where {} is null'.format(db, table, column)
+                query_enc_not_null = 'select count(*) from {}.{} where {} is not null;'.format(strip(db), strip(table), strip(column))
+                query_enc_null = 'select count(*) from {}.{} where {} is null;'.format(strip(db), strip(table), strip(column))
             elif dest_db_port == '5432':
                 query_enc_not_null = 'select count(*) from "{}".{}.{} where {}::text is not null'.format(db, schema, table, column)
                 query_enc_null = 'select count(*) from "{}".{}.{} where {}::text is null'.format(db, schema, table, column)
-
-            enc_not_null = run_query(dest_db_host, dest_db_port, root_user, root_pass, query_enc_not_null, db)
+            
+            enc_not_null = run_query(dest_db_host, dest_db_port, root_user, root_pass, query_enc_not_null, strip(db))
             ENN = enc_not_null[0][0]
-            enc_null = run_query(dest_db_host, dest_db_port, root_user, root_pass, query_enc_null, db)
+            enc_null = run_query(dest_db_host, dest_db_port, root_user, root_pass, query_enc_null, strip(db))
             EN = enc_null[0][0]
 
             ENC_COUNT_CHECK = True
@@ -207,8 +240,10 @@ def encryption_count_check(csv_path, column, src_db_host, src_db_port, dest_db_h
             else:
                 status = 'FAIL'
             
-            result = ('{}, {}, {}, {}, {}, {}, {}, {}, {} : {}'.format(db, strip(schema), strip(table), column, original_data, ONN, ON, ENN, EN, status))
-    
+            if dest_db_port == '5432':
+                result = ('{}, {}, {}, {}, {}, {}, {}, {}, {} : {}'.format(db, strip(schema), strip(table), column, original_data, ONN, ON, ENN, EN, status))
+            elif dest_db_port == '3306':
+                result = ('{}, {}, {}, {}, {}, {}, {}, {} : {}'.format(db, strip(table), column, original_data, ONN, ON, ENN, EN, status))
     return result
 
 
@@ -246,7 +281,7 @@ def encryption_check(src_db_host, src_db_port, dest_db_host, dest_db_port, root_
             else:
                 print('ENCRYPTION PASS: Column: {}'.format(column))
 
-            #print(encryption_count_check(csv_path, column, src_db_host, src_db_port, dest_db_host, dest_db_port, root_user, root_pass))
+            print(encryption_count_check(csv_path, column, src_db_host, src_db_port, dest_db_host, dest_db_port, root_user, root_pass))
 
 
 def decryption_check(src_db_host, src_db_port, bs_host, bs_port, dest_db_port, root_user, root_pass, BPS_path, BES_path):
@@ -264,6 +299,8 @@ def decryption_check(src_db_host, src_db_port, bs_host, bs_port, dest_db_port, r
             output_file_clear = None
             query_clear = None
             query_dec = None
+
+            start_db = 'MSSQL_LargeData'
 
             if src_db_port == '1521':
                 src_db = 'oracle'
@@ -293,60 +330,74 @@ def decryption_check(src_db_host, src_db_port, bs_host, bs_port, dest_db_port, r
 
             #Query for clear data from source DB
             if src_db_port == '3306':
-                query_clear = 'select HEX({}) from {}.{}'.format(column, db, table)
+                query_clear = 'select {} from {}.{}'.format(column, db, table)
             elif src_db_port == '5432':
                 query_clear = 'select {} from "{}"."{}";'.format(column, schema, table)
             elif src_db_port == '1521':
                 query_clear = 'select {} from "{}"."{}"'.format(strip(column), schema, table)
             elif src_db_port == '1433':
-                query_clear = 'SELECT CONVERT(varchar(max),{},1) from {}.{}.{};'.format(column, 'MSSQL_LargeData', db, table)
+                query_clear = 'SELECT {} from {}.{}.{};'.format(strip(column), start_db, db, table)
 
             #Query for decrypted data from destination DB
             if dest_db_port == '3306':
-                query_dec = 'select HEX({}) from {}.{};'.format(column, db, table)
+                query_dec = 'select {} from {}.{};'.format(column, db, table)
             else:
                 query_dec = 'select {} from {};'.format(column, table_name)
             
-            query_output = run_query(bs_host, bs_port, root_user, root_pass, query_dec, db)
-
-            with open(output_file_dec, 'w') as f:
-                for item in query_output:
-                    if type(item[0]) is memoryview:
-                        item = binascii.hexlify(item[0])
-                        if column_type_dict[column].startswith(('DECIMAL','decimal')):
-                            f.write("%s\n" % str(float(item[0])))
-                        else:
-                            f.write("%s\n" % str(item))
-                    else:
-                        if column_type_dict[column].startswith(('DECIMAL','decimal')):
-                            if item[0] is not None:
-                                f.write("%s\n" % str(float(item[0])))
-                            else:
-                                f.write("%s\n" % str(item))
-                        else:
-                            if item[0]:
-                                f.write("%s\n" % str(item))
-            
-            query_output = run_query(src_db_host, src_db_port, root_user, root_pass, query_clear, src_db)
+            if strip(column) != 'col_datetimeoffset':
+                query_output = run_query(src_db_host, src_db_port, root_user, root_pass, query_clear, src_db)
+            else:
+                query_output = run_query_datetimeoffset(src_db_host, src_db_port, root_user, root_pass, query_clear, src_db)
 
             with open(output_file_clear, 'w') as f:
                 for item in query_output:
                     if type(item[0]) is memoryview:
                         item = binascii.hexlify(item[0])
-                        if column_type_dict[column].startswith(('DECIMAL','decimal')):
-                            f.write("%s\n" % str(float(item[0])))
-                        else:
-                            f.write("%s\n" % str(item))
+                        f.write("%s\n" % str(item[0]).rstrip())
                     else:
-                        if column_type_dict[column].startswith(('DECIMAL','decimal')):
-                            if item[0] is not None:
-                                f.write("%s\n" % str(float(item[0])))
-                            else:
-                                f.write("%s\n" % str(item))
-                        else:
-                            if item[0]:
-                                f.write("%s\n" % str(item))
+                        f.write("%s\n" % str(item[0]).rstrip())
 
+            query_output = run_query(bs_host, bs_port, root_user, root_pass, query_dec, db)
+
+            with open(output_file_dec, 'w') as f:
+                for item in query_output:
+                    if column_type_dict[column].startswith(('TEXT','VARCHAR')):
+                        if type(item[0]) is memoryview:
+                            item = binascii.hexlify(item[0])
+                            if item[0] is None:
+                                f.write("%s\n" % str(item[0]))
+                            else:
+                                f.write("%s\n" % str(bytes(item[0]).decode('utf-8')))
+                        else:
+                            if item[0] is None:
+                                f.write("%s\n" % str(item[0]))
+                            else:
+                                f.write("%s\n" % str(bytes(item[0]).decode('utf-8')))
+
+                    elif column_type_dict[column].startswith(('BOOL')):
+                        if type(item[0]) is memoryview:
+                            item = binascii.hexlify(item[0])
+                            if item[0] == 1:
+                                f.write("%s\n" % str(True))
+                            elif item[0] == 0:
+                                f.write("%s\n" % str(False))
+                            else:
+                                f.write("%s\n" % str(None))
+                        else:
+                            if item[0] == 1:
+                                f.write("%s\n" % str(True))
+                            elif item[0] == 0:
+                                f.write("%s\n" % str(False))
+                            else:
+                                f.write("%s\n" % str(None))
+
+                    else:
+                        if type(item[0]) is memoryview:
+                            item = binascii.hexlify(item[0])
+                            f.write("%s\n" % str(item[0]))
+                        else:
+                            f.write("%s\n" % str(item[0]))
+        
             is_clear_file_empty = os.stat(output_file_clear).st_size==0
             is_dec_file_empty = os.stat(output_file_dec).st_size==0
 
@@ -363,6 +414,7 @@ def decryption_check(src_db_host, src_db_port, bs_host, bs_port, dest_db_port, r
                     print('Decryption Validation passed for column {}.{}'.format(table, column))
                 else:
                     print('Decryption Validation failed for column {}.{}'.format(table, column))
+            #sys.exit(1)
 
 
 def get_db_type(db_port):
@@ -385,6 +437,6 @@ def get_db_type(db_port):
 
 log_dir, decryption_logs = create_log_dirs()
 
-#encryption_check(src_db_host, src_db_port, dest_db_host, dest_db_port, root_user, root_pass, BPS_path, BES_path, csv_path)
+encryption_check(src_db_host, src_db_port, dest_db_host, dest_db_port, root_user, root_pass, BPS_path, BES_path, csv_path)
 
-decryption_check(src_db_host, src_db_port, bs_host, bs_port, dest_db_port, root_user, root_pass, BPS_path, BES_path)
+#decryption_check(src_db_host, src_db_port, bs_host, bs_port, dest_db_port, root_user, root_pass, BPS_path, BES_path)
