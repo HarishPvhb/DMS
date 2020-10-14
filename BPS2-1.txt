@@ -1,0 +1,5 @@
+`New`.`LargeData`.`col_time` 221 VARCHAR(16)
+`New`.`LargeData`.`col_datetime2` 226 VARCHAR(37)
+`New`.`LargeData`.`col_datetimeoffset` 227 VARCHAR(34)
+`New`.`LargeData`.`col_bit_nullable` 238 BOOL
+`New`.`LargeData`.`col_bit_nonnullable` 239 BOOL NOT NULL

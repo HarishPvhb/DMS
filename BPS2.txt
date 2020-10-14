@@ -1,0 +1,41 @@
+`New`.`LargeData`.`col_TinyInt_nullable` 200 TINYINT UNSIGNED
+`New`.`LargeData`.`col_tinyint_nonnullable` 201 TINYINT UNSIGNED NOT NULL
+`New`.`LargeData`.`col_smallint_nullable` 202 SMALLINT
+`New`.`LargeData`.`col_smallint_nonnullable` 203 SMALLINT NOT NULL
+`New`.`LargeData`.`col_int_nullable` 204 INTEGER
+`New`.`LargeData`.`col_int_nonnullable` 205 INTEGER NOT NULL
+`New`.`LargeData`.`col_bigint_nullable` 206 BIGINT
+`New`.`LargeData`.`col_bigint_nonnullable` 207 BIGINT NOT NULL
+`New`.`LargeData`.`col_char10` 208 VARCHAR(10)
+`New`.`LargeData`.`col_nchar100` 209 VARCHAR(100) CHARACTER SET utf16
+`New`.`LargeData`.`col_varchar1000` 210 VARCHAR(1000)
+`New`.`LargeData`.`col_varcharmax` 211 TEXT
+`New`.`LargeData`.`col_nvarchar500` 212 VARCHAR(500) CHARACTER SET utf16
+`New`.`LargeData`.`col_nvarcharmax` 213 TEXT CHARACTER SET utf16
+`New`.`LargeData`.`col_image` 214 BLOB
+`New`.`LargeData`.`col_binary50` 215 VARBINARY(50)
+`New`.`LargeData`.`col_varbinary2000` 216 VARBINARY(2000)
+`New`.`LargeData`.`col_varbinarymax` 217 BLOB
+`New`.`LargeData`.`col_text` 218 TEXT
+`New`.`LargeData`.`col_ntext` 219 TEXT CHARACTER SET utf16
+`New`.`LargeData`.`col_date` 220 DATE
+`New`.`LargeData`.`col_time` 221 VARCHAR(16)
+`New`.`LargeData`.`col_datetime_nullable` 222 DATETIME(3)
+`New`.`LargeData`.`col_datetime_nonnullable` 223 DATETIME(3) NOT NULL
+`New`.`LargeData`.`col_smalldatetime_nullable` 224 DATETIME(0)
+`New`.`LargeData`.`col_smalldatetime_nonnullable` 225 DATETIME(0) NOT NULL
+`New`.`LargeData`.`col_datetime2` 226 VARCHAR(37)
+`New`.`LargeData`.`col_datetimeoffset` 227 VARCHAR(34)
+`New`.`LargeData`.`col_decimal` 228 DECIMAL(5,3)
+`New`.`LargeData`.`col_numeric` 229 DECIMAL(10,5)
+`New`.`LargeData`.`col_smallmoney_nullable` 230 DECIMAL(10,4)
+`New`.`LargeData`.`col_smallmoney_nonnullable` 231 DECIMAL(10,4) NOT NULL
+`New`.`LargeData`.`col_money_nullable` 232 DECIMAL(19,4)
+`New`.`LargeData`.`col_money_nonnullable` 233 DECIMAL(19,4) NOT NULL
+`New`.`LargeData`.`col_float_nullable` 234 FLOAT
+`New`.`LargeData`.`col_float_nonnullable` 235 DOUBLE NOT NULL
+`New`.`LargeData`.`col_real_nullable` 236 FLOAT
+`New`.`LargeData`.`col_real_nonnullable` 237 FLOAT NOT NULL
+`New`.`LargeData`.`col_bit_nullable` 238 BOOL
+`New`.`LargeData`.`col_bit_nonnullable` 239 BOOL NOT NULL
+`New`.`LargeData`.`col_xml` 240 TEXT CHARACTER SET utf16
